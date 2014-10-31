@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2014
+ *
+ * This file is licensed under the Affero General Public License version 3
+ * or later.
+ *
+ * See the COPYING-README file.
+ *
+ */
 (function(){
 
 function updateStatus(statusEl, result){
@@ -11,6 +20,12 @@ function updateStatus(statusEl, result){
 	}
 }
 
+/**
+ * Returns the selection of applicable users in the given configuration row
+ *
+ * @param $row configuration row
+ * @return array array of user names
+ */
 function getSelection($row) {
 	var values = $row.find('.applicableUsers').select2('val');
 	if (!values || values.length === 0) {
@@ -31,154 +46,236 @@ function highlightInput($input) {
 	}
 }
 
-OC.MountConfig={
-	saveStorage:function($tr, callback) {
-		var mountPoint = $tr.find('.mountPoint input').val();
-		var oldMountPoint = $tr.find('.mountPoint input').data('mountpoint');
-		if (mountPoint === '') {
+/**
+ * External storage model
+ */
+var Storage = function(id) {
+	this.id = id;
+};
+Storage.prototype = {
+	_url: 'apps/files_external/storages',
+
+	/**
+	 * Storage id
+	 *
+	 * @type int
+	 */
+	id: null,
+
+	/**
+	 * Mount point
+	 *
+	 * @type string
+	 */
+	mountPoint: '',
+
+	/**
+	 * Applicable users
+	 *
+	 * @type Array.<string>
+	 */
+	applicableUsers: [],
+
+	/**
+	 * Applicable groups
+	 *
+	 * @type Array.<string>
+	 */
+	applicableGroups: [],
+
+	/**
+	 * Backend class name
+	 *
+	 * @type string
+	 */
+	backendClass: null,
+
+	/**
+	 * Backend-specific configuration
+	 *
+	 * @type Object.<string,object>
+	 */
+	backendOptions: {},
+
+	/**
+	 * Whether this storage is a personal external storage
+	 *
+	 * @type boolean
+	 */
+	isPersonal: null,
+
+	/**
+	 * Creates or saves the storage.
+	 *
+	 * @param {Function} [options.success] success callback, receives model as argument
+	 * @param {Function} [options.error] error callback
+	 */
+	save: function(options) {
+		var self = this;
+		var url = OC.generateUrl(this._url);
+		var method = 'POST';
+		if (_.isNumber(this.id)) {
+			method = 'PUT';
+			url = OC.generateUrl(this._url + '/{id}', {id: this.id});
+		}
+
+		$.ajax({
+			type: method,
+			url: url,
+			data: {
+				mountPoint: this.mountPoint,
+				'class': this.backendClass,
+				classOptions: this.backendOptions,
+				applicable: this.applicable,
+				isPersonal: !!this.isPersonal
+			},
+			success: function(result) {
+				self.id = result.id;
+				if (_.isFunction(options.success)) {
+					options.success(self);
+				}
+			},
+			error: options.error
+		});
+	},
+
+	/**
+	 * Deletes the storage
+	 *
+	 * @param {Function} [options.success] success callback, receives model as argument
+	 * @param {Function} [options.error] error callback
+	 */
+	destroy: function(options) {
+		var self = this;
+		$.ajax({
+			type: 'DELETE',
+			url: OC.generateUrl(this._url + '/{id}', {id: this.id}),
+			data: {
+				mountPoint: this.mountPoint,
+				'class': this.backendClass,
+				classOptions: this.backendOptions,
+				applicable: this.applicable,
+				isPersonal: !!this.isPersonal
+			},
+			success: function(result) {
+				self.id = result.id;
+				if (_.isFunction(options.success)) {
+					options.success(self);
+				}
+			},
+			error: options.error
+		});
+	},
+
+	validate: function() {
+		if (this.mountPoint === '') {
 			return false;
 		}
-		var statusSpan = $tr.find('.status span');
-		var backendClass = $tr.find('.backend').data('class');
-		var configuration = $tr.find('.configuration input');
-		var addMountPoint = true;
-		if (configuration.length < 1) {
+		if (this.errors) {
 			return false;
 		}
+		return true;
+	}
+};
+
+var MountConfig = {
+
+	/**
+	 * Gets the storage model from the given row
+	 *
+	 * @param $tr row element
+	 * @param boolean isPersonal whether this is a personal mount point
+	 * @return {OCA.External.Storage} storage model instance
+	 */
+	getStorage: function($tr, isPersonal) {
+		var storage = new OCA.External.Storage($tr.data('id'));
+		storage.mountPoint = $tr.find('.mountPoint input').val();
+		storage.backendClass = $tr.find('.backend').data('class');
+
 		var classOptions = {};
+		var configuration = $tr.find('.configuration input');
+		var missingOptions = [];
 		$.each(configuration, function(index, input) {
-			if ($(input).val() === '' && !$(input).hasClass('optional')) {
-				addMountPoint = false;
-				return false;
+			var $input = $(input);
+			var parameter = $input.data('parameter');
+			if ($input.attr('type') === 'button') {
+				return;
+			}
+			if ($input.val() === '' && !$input.hasClass('optional')) {
+				missingOptions.push(parameter);
+				return;
 			}
 			if ($(input).is(':checkbox')) {
 				if ($(input).is(':checked')) {
-					classOptions[$(input).data('parameter')] = true;
+					classOptions[parameter] = true;
 				} else {
-					classOptions[$(input).data('parameter')] = false;
+					classOptions[parameter] = false;
 				}
 			} else {
-				classOptions[$(input).data('parameter')] = $(input).val();
+				classOptions[parameter] = $(input).val();
 			}
 		});
-		if ($('#externalStorage').data('admin') === true) {
+
+		storage.backendOptions = classOptions;
+		if (missingOptions.length) {
+			storage.errors = {
+				backendOptions: missingOptions
+			};
+		}
+
+		// gather selected users and groups
+		if (!isPersonal) {
+			var groups = [];
+			var users = [];
 			var multiselect = getSelection($tr);
+			$.each(multiselect, function(index, value) {
+				var pos = value.indexOf('(group)');
+				if (pos !== -1) {
+					groups.push(value.substr(0, pos));
+				} else {
+					users.push(value);
+				}
+			});
+			// FIXME: this should be done in the multiselect change event instead
+			$tr.find('.applicable')
+				.data('applicable-groups', groups)
+				.data('applicable-users', users);
+
+			this.applicableUsers = users;
+			this.applicableGroups = groups;
 		}
-		if (addMountPoint) {
-			var status = false;
-			if ($('#externalStorage').data('admin') === true) {
-				var isPersonal = false;
-				var oldGroups = $tr.find('.applicable').data('applicable-groups');
-				var oldUsers = $tr.find('.applicable').data('applicable-users');
-				var groups = [];
-				var users = [];
-				$.each(multiselect, function(index, value) {
-					var pos = value.indexOf('(group)');
-					if (pos != -1) {
-						var mountType = 'group';
-						var applicable = value.substr(0, pos);
-						if ($.inArray(applicable, oldGroups) != -1) {
-							oldGroups.splice($.inArray(applicable, oldGroups), 1);
-						}
-						groups.push(applicable);
-					} else {
-						var mountType = 'user';
-						var applicable = value;
-						if ($.inArray(applicable, oldUsers) != -1) {
-							oldUsers.splice($.inArray(applicable, oldUsers), 1);
-						}
-						users.push(applicable);
-					}
-					statusSpan.addClass('loading-small').removeClass('error success');
-					$.ajax({type: 'POST',
-						url: OC.filePath('files_external', 'ajax', 'addMountPoint.php'),
-						data: {
-							mountPoint: mountPoint,
-							'class': backendClass,
-							classOptions: classOptions,
-							mountType: mountType,
-							applicable: applicable,
-							isPersonal: isPersonal,
-							oldMountPoint: oldMountPoint
-						},
-						success: function(result) {
-							$tr.find('.mountPoint input').data('mountpoint', mountPoint);
-							status = updateStatus(statusSpan, result);
-							if (callback) {
-								callback(status);
-							}
-						},
-						error: function(result){
-							status = updateStatus(statusSpan, result);
-							if (callback) {
-								callback(status);
-							}
-						}
-					});
-				});
-				$tr.find('.applicable').data('applicable-groups', groups);
-				$tr.find('.applicable').data('applicable-users', users);
-				var mountType = 'group';
-				$.each(oldGroups, function(index, applicable) {
-					$.ajax({type: 'POST',
-						url: OC.filePath('files_external', 'ajax', 'removeMountPoint.php'),
-						data: {
-							mountPoint: mountPoint,
-							'class': backendClass,
-							classOptions: classOptions,
-							mountType: mountType,
-							applicable: applicable,
-							isPersonal: isPersonal
-						}
-					});
-				});
-				var mountType = 'user';
-				$.each(oldUsers, function(index, applicable) {
-					$.ajax({type: 'POST',
-						url: OC.filePath('files_external', 'ajax', 'removeMountPoint.php'),
-						data: {
-							mountPoint: mountPoint,
-							'class': backendClass,
-							classOptions: classOptions,
-							mountType: mountType,
-							applicable: applicable,
-							isPersonal: isPersonal
-						}
-					});
-				});
-			} else {
-				var isPersonal = true;
-				var mountType = 'user';
-				var applicable = OC.currentUser;
-				statusSpan.addClass('loading-small').removeClass('error success');
-				$.ajax({type: 'POST',
-					url: OC.filePath('files_external', 'ajax', 'addMountPoint.php'),
-					data: {
-						mountPoint: mountPoint,
-						'class': backendClass,
-						classOptions: classOptions,
-						mountType: mountType,
-						applicable: applicable,
-						isPersonal: isPersonal,
-						oldMountPoint: oldMountPoint
-					},
-					success: function(result) {
-						$tr.find('.mountPoint input').data('mountpoint', mountPoint);
-						status = updateStatus(statusSpan, result);
-						if (callback) {
-							callback(status);
-						}
-					},
-					error: function(result){
-						status = updateStatus(statusSpan, result);
-						if (callback) {
-							callback(status);
-						}
-					}
-				});
+
+		this.isPersonal = isPersonal;
+
+		return storage;
+	},
+
+	/**
+	 * Saves the storage from the given tr
+	 *
+	 * @param $tr storage row
+	 * @param Function callback callback to call after save
+	 */
+	saveStorage:function($tr, callback) {
+		var isPersonal = $('#externalStorage').data('admin') !== true;
+		var storage = this.getStorage($tr, isPersonal);
+		if (!storage.validate()) {
+			return false;
+		}
+
+		var statusSpan = $tr.find('.status span');
+		statusSpan.addClass('loading-small').removeClass('error success');
+		storage.save({
+			success: function() {
+				// TODO: update status
+				if (_.isFunction(callback)) {
+					callback(storage);
+				}
+			},
+			error: function() {
 			}
-			return status;
-		}
+		});
+		return status;
 	}
 };
 
@@ -393,7 +490,7 @@ $(document).ready(function() {
 		var $tr = $me.closest('tr');
 		setTimeout(function() {
 			highlightInput($me);
-			OC.MountConfig.saveStorage($tr);
+			MountConfig.saveStorage($tr);
 		}, 20);
 	});
 
@@ -405,21 +502,21 @@ $(document).ready(function() {
 		highlightInput($(this));
 		if ($(this).val) {
 			timer = setTimeout(function() {
-				OC.MountConfig.saveStorage($tr);
+				MountConfig.saveStorage($tr);
 			}, 2000);
 		}
 	});
 
 	$externalStorage.on('change', 'td input:checkbox', function() {
-		OC.MountConfig.saveStorage($(this).closest('tr'));
+		MountConfig.saveStorage($(this).closest('tr'));
 	});
 
 	$externalStorage.on('change', '.applicable', function() {
-		OC.MountConfig.saveStorage($(this).closest('tr'));
+		MountConfig.saveStorage($(this).closest('tr'));
 	});
 
 	$externalStorage.on('click', '.status>span', function() {
-		OC.MountConfig.saveStorage($(this).closest('tr'));
+		MountConfig.saveStorage($(this).closest('tr'));
 	});
 
 	$('#sslCertificate').on('click', 'td.remove>img', function() {
@@ -431,29 +528,16 @@ $(document).ready(function() {
 
 	$externalStorage.on('click', 'td.remove>img', function() {
 		var $tr = $(this).closest('tr');
-		var mountPoint = $tr.find('.mountPoint input').val();
+		var storage = new OCA.External.Storage($tr.data('id'));
+		var statusSpan = $tr.find('.status span');
+		statusSpan.addClass('loading-small').removeClass('error success');
 
-		if ($externalStorage.data('admin') === true) {
-			var isPersonal = false;
-			var multiselect = getSelection($tr);
-			$.each(multiselect, function(index, value) {
-				var pos = value.indexOf('(group)');
-				if (pos != -1) {
-					var mountType = 'group';
-					var applicable = value.substr(0, pos);
-				} else {
-					var mountType = 'user';
-					var applicable = value;
-				}
-				$.post(OC.filePath('files_external', 'ajax', 'removeMountPoint.php'), { mountPoint: mountPoint, mountType: mountType, applicable: applicable, isPersonal: isPersonal });
-			});
-		} else {
-			var mountType = 'user';
-			var applicable = OC.currentUser;
-			var isPersonal = true;
-			$.post(OC.filePath('files_external', 'ajax', 'removeMountPoint.php'), { mountPoint: mountPoint, mountType: mountType, applicable: applicable, isPersonal: isPersonal });
-		}
-		$tr.remove();
+		storage.destroy({
+			success: function() {
+				$tr.remove();
+				// TODO: update status
+			}
+		});
 	});
 
 	var $allowUserMounting = $('#allowUserMounting');
@@ -485,5 +569,11 @@ $(document).ready(function() {
 		}
 	});
 });
+
+// export
+OCA.External = OCA.External || {};
+
+OCA.External.Storage = Storage;
+OCA.External.MountConfig = MountConfig;
 
 })();
