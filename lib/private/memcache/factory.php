@@ -17,6 +17,23 @@ class Factory implements ICacheFactory {
 	private $globalPrefix;
 
 	/**
+	 * @var string[] $distributedCaches
+	 */
+	private $distributedCaches = [
+		'\\OC\\Memcache\\Redis',
+		'\\OC\\Memcache\\Memcached',
+	];
+
+	/**
+	 * @var string[] $localCaches
+	 */
+	private $localCaches = [
+		'\\OC\\Memcache\\APCu',
+		'\\OC\\Memcache\\APC',
+		'\\OC\\Memcache\\XCache',
+	];
+
+	/**
 	 * @param string $globalPrefix
 	 */
 	public function __construct($globalPrefix) {
@@ -24,63 +41,100 @@ class Factory implements ICacheFactory {
 	}
 
 	/**
+	 * @param string[] $cacheList
+	 * @return string|null
+	 */
+	private function getAvailable(array $cacheList) {
+		foreach ($cacheList as $cache) {
+			if ($cache::isAvailable()) {
+				return $cache;
+			}
+		}
+	}
+
+	/**
+	 * check distributed backend availability
+	 *
+	 * @return string|null
+	 */
+	public function getAvailableDistributed() {
+		return $this->getAvailable($this->distributedCaches);
+	}
+
+	/**
+	 * check local backend availability
+	 *
+	 * @return string|null
+	 */
+	public function getAvailableLocal() {
+		return $this->getAvailable($this->localCaches);
+	}
+
+	/**
+	 * create a distributed cache instance
+	 *
+	 * @param string $prefix
+	 * @return \OC\Memcache\Cache|null
+	 */
+	public function createDistributed($prefix = '') {
+		if ($cache = $this->getAvailableDistributed()) {
+			return new $cache($this->globalPrefix . '/' . $prefix);
+		}
+	}
+
+	/**
+	 * create a local cache instance
+	 *
+	 * @param string $prefix
+	 * @return \OC\Memcache\Cache|null
+	 */
+	public function createLocal($prefix = '') {
+		if ($cache = $this->getAvailableLocal()) {
+			return new $cache($this->globalPrefix . '/' . $prefix);
+		}
+	}
+
+	/**
 	 * get a cache instance, or Null backend if no backend available
+	 * tries to get a distributed backend first, else a local backend
 	 *
 	 * @param string $prefix
 	 * @return \OC\Memcache\Cache
 	 */
-	function create($prefix = '') {
-		$prefix = $this->globalPrefix . '/' . $prefix;
-		if (XCache::isAvailable()) {
-			return new XCache($prefix);
-		} elseif (APCu::isAvailable()) {
-			return new APCu($prefix);
-		} elseif (APC::isAvailable()) {
-			return new APC($prefix);
-		} elseif (Redis::isAvailable()) {
-			return new Redis($prefix);
-		} elseif (Memcached::isAvailable()) {
-			return new Memcached($prefix);
-		} else {
-			return new Null($prefix);
+	public function create($prefix = '') {
+		if ($cache = $this->createDistributed($prefix)) {
+			return $cache;
 		}
+		if ($cache = $this->createLocal($prefix)) {
+			return $cache;
+		}
+		return new Null();
 	}
 
 	/**
-	 * check if there is a memcache backend available
+	 * check memcache availability
 	 *
 	 * @return bool
 	 */
 	public function isAvailable() {
-		return XCache::isAvailable() || APCu::isAvailable() || APC::isAvailable() || Redis::isAvailable() || Memcached::isAvailable();
+		return $this->getAvailableDistributed() || $this->getAvailableLocal();
 	}
 
 	/**
-	 * get a in-server cache instance, will return null if no backend is available
-	 *
+	 * @see \OC\Memcache\Factory::createLocal()
 	 * @param string $prefix
-	 * @return null|Cache
+	 * @return \OC\Memcache\Cache|null
 	 */
 	public function createLowLatency($prefix = '') {
-		$prefix = $this->globalPrefix . '/' . $prefix;
-		if (XCache::isAvailable()) {
-			return new XCache($prefix);
-		} elseif (APCu::isAvailable()) {
-			return new APCu($prefix);
-		} elseif (APC::isAvailable()) {
-			return new APC($prefix);
-		} else {
-			return null;
-		}
+		return $this->createLocal($prefix);
 	}
 
 	/**
-	 * check if there is a in-server backend available
-	 *
+	 * @see \OC\Memcache\Factory::getAvailableLocal()
 	 * @return bool
 	 */
 	public function isAvailableLowLatency() {
-		return XCache::isAvailable() || APCu::isAvailable() || APC::isAvailable();
+		return (bool)$this->getAvailableLocal();
 	}
 
 
