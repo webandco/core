@@ -337,7 +337,6 @@ OC.Settings.Apps = OC.Settings.Apps || {
 		$('#apps-list').html('');
 
 		var apps = _.filter(OC.Settings.Apps.State.apps, function (app) {
-			console.log(app.name);
 			return app.name.toLowerCase().indexOf(query) !== -1;
 		});
 
