@@ -26,6 +26,7 @@ namespace OC\AppFramework\DependencyInjection;
 
 use OC;
 use OC\AppFramework\Http;
+use OC\AppFramework\Http\IO;
 use OC\AppFramework\Http\Request;
 use OC\AppFramework\Http\Dispatcher;
 use OC\AppFramework\Core\API;
@@ -308,6 +309,10 @@ class DIContainer extends SimpleContainer implements IAppContainer {
 
 		$this->registerService('ControllerMethodReflector', function($c) {
 			return new ControllerMethodReflector();
+		});
+
+		$this->registerService('IO', function($c){
+			return new IO();
 		});
 
 	}
