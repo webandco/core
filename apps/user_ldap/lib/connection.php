@@ -30,8 +30,10 @@ namespace OCA\user_ldap\lib;
  * @property string ldapUserFilter
  * @property string ldapUserDisplayName
  * @property boolean hasPagedResultSupport
+ * @property string[] ldapBaseUsers
  * @property int|string ldapPagingSize holds an integer
- * @property bool|mixed|void ldapLoginFilter
+ * @property string ldapLoginFilter
+ * @property string ldapGroupMemberAssocAttr
  */
 class Connection extends LDAPUtility {
 	private $ldapConnectionRes = null;
