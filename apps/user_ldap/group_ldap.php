@@ -263,8 +263,12 @@ class GROUP_LDAP extends BackendUtility implements \OCP\GroupInterface {
 		}
 
 		$filterParts = [];
-		$filterParts[] = $this->access->getFilterForUserCount();
+		// part for counting users (see countUsers in user backend)
+		// it is consolidated in OC 8. No big changes for OC 7.
+		$filterParts[] = \OCP\Util::mb_str_replace(
+			'%uid', '*', $this->access->connection->ldapLoginFilter, 'UTF-8');
 		if(!empty($search)) {
+			$search = $this->access->escapeFilterPart($search, true);
 			$filterParts[] = $this->access->getFilterPartForUserSearch($search);
 		}
 		$filterParts[] = 'primaryGroupID=' . $groupID;

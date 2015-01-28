@@ -31,6 +31,7 @@ namespace OCA\user_ldap\lib;
  * @property string ldapUserDisplayName
  * @property boolean hasPagedResultSupport
  * @property int|string ldapPagingSize holds an integer
+ * @property bool|mixed|void ldapLoginFilter
  */
 class Connection extends LDAPUtility {
 	private $ldapConnectionRes = null;
