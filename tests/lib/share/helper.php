@@ -49,4 +49,46 @@ class Test_Share_Helper extends \Test\TestCase {
 		$result = \OC\Share\Helper::calculateExpireDate($defaultExpireSettings, $creationTime, $userExpireDate);
 		$this->assertSame($expected, $result);
 	}
+
+	public function fixRemoteURLInShareWithData() {
+		$userPrefix = ['test@', 'na/me@'];
+		$protocols = ['', 'http://', 'https://'];
+		$remotes = [
+			'localhost',
+			'local.host',
+			'dev.local.host',
+			'dev.local.host/path',
+			'127.0.0.1',
+			'::1',
+			'::192.0.2.128',
+		];
+
+		$testCases = [
+			['test', 'test'],
+			['na/me', 'na/me'],
+			['na/me/', 'na/me'],
+			['na/index.php', 'na/index.php'],
+		];
+
+		foreach ($userPrefix as $user) {
+			foreach ($remotes as $remote) {
+				foreach ($protocols as $protocol) {
+					$baseUrl = $user . $protocol . $remote;
+
+					$testCases[] = [$baseUrl, $baseUrl];
+					$testCases[] = [$baseUrl . '/', $baseUrl];
+					$testCases[] = [$baseUrl . '/index.php', $baseUrl];
+					$testCases[] = [$baseUrl . '/index.php/s/token', $baseUrl];
+				}
+			}
+		}
+		return $testCases;
+	}
+
+	/**
+	 * @dataProvider fixRemoteURLInShareWithData
+	 */
+	public function testFixRemoteURLInShareWith($remote, $expected) {
+		$this->assertSame($expected, \OC\Share\Helper::fixRemoteURLInShareWith($remote));
+	}
 }
