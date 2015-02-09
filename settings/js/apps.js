@@ -334,7 +334,7 @@ OC.Settings.Apps = OC.Settings.Apps || {
 
 	filter: function(query) {
 		query = query.toLowerCase();
-		$('#apps-list').html('');
+		$('#apps-list').find('.section').hide();
 
 		var apps = _.filter(OC.Settings.Apps.State.apps, function (app) {
 			return app.name.toLowerCase().indexOf(query) !== -1;
@@ -344,13 +344,10 @@ OC.Settings.Apps = OC.Settings.Apps || {
 			return app.description.toLowerCase().indexOf(query) !== -1;
 		}));
 
-		apps = _.uniq(apps, function(app){return app.id});
-
-		var source = $("#app-template").html();
-		var template = Handlebars.compile(source);
+		apps = _.uniq(apps, function(app){return app.id;});
 
 		_.each(apps, function (app) {
-			OC.Settings.Apps.renderApp(app, template, null);
+			$('#app-' + app.id).show();
 		});
 	}
 };
