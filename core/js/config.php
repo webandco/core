@@ -74,6 +74,7 @@ $array = array(
 			'session_keepalive'	=> \OCP\Config::getSystemValue('session_keepalive', true),
 			'version'			=> implode('.', OC_Util::getVersion()),
 			'versionstring'		=> OC_Util::getVersionString(),
+			'modRewriteWorking'	=> \OC::$server->getConfig()->getSystemValue('front_controller_active', false),
 		)
 	),
 	"oc_appconfig" => json_encode(

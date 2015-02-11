@@ -45,8 +45,8 @@ class URLGenerator implements IURLGenerator {
 
 	/**
 	 * Creates an absolute url using a defined route
-	 * @param string $route
-	 * @param array $parameters
+	 * @param string $routeName
+	 * @param array $arguments
 	 * @internal param array $args with param=>value, will be appended to the returned url
 	 * @return string the url
 	 *
