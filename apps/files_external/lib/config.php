@@ -143,14 +143,8 @@ class OC_Mount_Config {
 		$mountPoints = array();
 
 		$datadir = \OC_Config::getValue("datadirectory", \OC::$SERVERROOT . "/data");
-		$mount_file = \OC_Config::getValue("mount_file", $datadir . "/mount.json");
 
 		$backends = self::getBackends();
-
-		//move config file to it's new position
-		if (is_file(\OC::$SERVERROOT . '/config/mount.json')) {
-			rename(\OC::$SERVERROOT . '/config/mount.json', $mount_file);
-		}
 
 		// Load system mount points
 		$mountConfig = self::readData();
@@ -476,6 +470,8 @@ class OC_Mount_Config {
 	 * @param bool $isPersonal Personal or system mount point i.e. is this being called from the personal or admin page
 	 * @param int|null $priority Mount point priority, null for default
 	 * @return boolean
+	 *
+	 * @deprecated use StoragesService#addStorage() instead
 	 */
 	public static function addMountPoint($mountPoint,
 										 $class,
@@ -560,6 +556,8 @@ class OC_Mount_Config {
 	 * @param string $applicable User or group to remove mount from
 	 * @param bool $isPersonal Personal or system mount point
 	 * @return bool
+	 *
+	 * @deprecated use StoragesService#removeStorage() instead
 	 */
 	public static function removeMountPoint($mountPoint, $mountType, $applicable, $isPersonal = false) {
 		// Verify that the mount point applies for the current user
@@ -624,23 +622,15 @@ class OC_Mount_Config {
 	 * @param string|null $user If not null, personal for $user, otherwise system
 	 * @return array
 	 */
-	private static function readData($user = null) {
-		$parser = new \OC\ArrayParser();
+	public static function readData($user = null) {
 		if (isset($user)) {
-			$phpFile = OC_User::getHome($user) . '/mount.php';
 			$jsonFile = OC_User::getHome($user) . '/mount.json';
 		} else {
-			$phpFile = OC::$SERVERROOT . '/config/mount.php';
 			$datadir = \OC_Config::getValue('datadirectory', \OC::$SERVERROOT . '/data/');
 			$jsonFile = \OC_Config::getValue('mount_file', $datadir . '/mount.json');
 		}
 		if (is_file($jsonFile)) {
 			$mountPoints = json_decode(file_get_contents($jsonFile), true);
-			if (is_array($mountPoints)) {
-				return $mountPoints;
-			}
-		} elseif (is_file($phpFile)) {
-			$mountPoints = $parser->parsePHP(file_get_contents($phpFile));
 			if (is_array($mountPoints)) {
 				return $mountPoints;
 			}
@@ -654,7 +644,7 @@ class OC_Mount_Config {
 	 * @param string|null $user If not null, personal for $user, otherwise system
 	 * @param array $data Mount points
 	 */
-	private static function writeData($user, $data) {
+	public static function writeData($user, $data) {
 		if (isset($user)) {
 			$file = OC_User::getHome($user) . '/mount.json';
 		} else {
@@ -771,7 +761,7 @@ class OC_Mount_Config {
 	 * @param array $options mount options
 	 * @return array updated options
 	 */
-	private static function encryptPasswords($options) {
+	public static function encryptPasswords($options) {
 		if (isset($options['password'])) {
 			$options['password_encrypted'] = self::encryptPassword($options['password']);
 			// do not unset the password, we want to keep the keys order
@@ -787,7 +777,7 @@ class OC_Mount_Config {
 	 * @param array $options mount options
 	 * @return array updated options
 	 */
-	private static function decryptPasswords($options) {
+	public static function decryptPasswords($options) {
 		// note: legacy options might still have the unencrypted password in the "password" field
 		if (isset($options['password_encrypted'])) {
 			$options['password'] = self::decryptPassword($options['password_encrypted']);

@@ -29,7 +29,7 @@ function updateStatus(statusEl, result){
 function getSelection($row) {
 	var values = $row.find('.applicableUsers').select2('val');
 	if (!values || values.length === 0) {
-		values = ['all'];
+		values = [];
 	}
 	return values;
 }
@@ -123,10 +123,12 @@ Storage.prototype = {
 			type: method,
 			url: url,
 			data: {
+				id: this.id,
 				mountPoint: this.mountPoint,
-				'class': this.backendClass,
-				classOptions: this.backendOptions,
-				applicable: this.applicable,
+				backendClass: this.backendClass,
+				backendOptions: this.backendOptions,
+				applicableUsers: this.applicableUsers,
+				applicableGroups: this.applicableGroups,
 				isPersonal: !!this.isPersonal
 			},
 			success: function(result) {
@@ -151,14 +153,9 @@ Storage.prototype = {
 			type: 'DELETE',
 			url: OC.generateUrl(this._url + '/{id}', {id: this.id}),
 			data: {
-				mountPoint: this.mountPoint,
-				'class': this.backendClass,
-				classOptions: this.backendOptions,
-				applicable: this.applicable,
 				isPersonal: !!this.isPersonal
 			},
-			success: function(result) {
-				self.id = result.id;
+			success: function() {
 				if (_.isFunction(options.success)) {
 					options.success(self);
 				}
@@ -167,6 +164,11 @@ Storage.prototype = {
 		});
 	},
 
+	/**
+	 * Validate this model
+	 *
+	 * @return {boolean} false if errors exist, true otherwise
+	 */
 	validate: function() {
 		if (this.mountPoint === '') {
 			return false;
@@ -188,7 +190,12 @@ var MountConfig = {
 	 * @return {OCA.External.Storage} storage model instance
 	 */
 	getStorage: function($tr, isPersonal) {
-		var storage = new OCA.External.Storage($tr.data('id'));
+		var storageId = parseInt($tr.attr('data-id'), 10);
+		if (!storageId) {
+			// new entry
+			storageId = null;
+		}
+		var storage = new OCA.External.Storage(storageId);
 		storage.mountPoint = $tr.find('.mountPoint input').val();
 		storage.backendClass = $tr.find('.backend').data('class');
 
@@ -241,11 +248,15 @@ var MountConfig = {
 				.data('applicable-groups', groups)
 				.data('applicable-users', users);
 
-			this.applicableUsers = users;
-			this.applicableGroups = groups;
+			storage.applicableUsers = users;
+			storage.applicableGroups = groups;
+		} else {
+			// equivalent of "all"
+			storage.applicableUsers = [];
+			storage.applicableGroups = [];
 		}
 
-		this.isPersonal = isPersonal;
+		storage.isPersonal = isPersonal;
 
 		return storage;
 	},
@@ -266,8 +277,10 @@ var MountConfig = {
 		var statusSpan = $tr.find('.status span');
 		statusSpan.addClass('loading-small').removeClass('error success');
 		storage.save({
-			success: function() {
+			success: function(result) {
 				// TODO: update status
+				$tr.attr('data-id') = result.id;
+				
 				if (_.isFunction(callback)) {
 					callback(storage);
 				}
@@ -293,7 +306,7 @@ $(document).ready(function() {
 				groupsId.push(this + '(group)');
 			});
 			var users = $applicable.data('applicable-users');
-			if (users.indexOf('all') > -1) {
+			if (users.indexOf('all') > -1 || users === '') {
 				$tr.find('.applicableUsers').val('');
 			} else {
 				$tr.find('.applicableUsers').val(groupsId.concat(users).join(','));
