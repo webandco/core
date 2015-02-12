@@ -9,6 +9,7 @@
 namespace OCA\Files_Sharing\External;
 
 use OC\Files\Filesystem;
+use OCA\Files_Sharing\External\BackgroundJob\AsyncHttpJob;
 
 class Manager {
 	const STORAGE = '\OCA\Files_Sharing\External\Storage';
@@ -175,17 +176,16 @@ class Manager {
 	 * @param string $token
 	 * @param int $id
 	 * @param string $feedback
-	 * @return boolean
+	 * @return void
 	 */
 	private function sendFeedbackToRemote($remote, $token, $id, $feedback) {
 
 		$url = $remote . \OCP\Share::BASE_PATH_TO_SHARE_API . '/' . $id . '/' . $feedback . '?format=' . \OCP\Share::RESPONSE_FORMAT;
+
+		$user = \OC::$server->getUserSession()->getUser();
 		$fields = array('token' => $token);
-
-		$result = $this->httpHelper->post($url, $fields);
-		$status = json_decode($result['result'], true);
-
-		return ($result['success'] && $status['ocs']['meta']['statuscode'] === 100);
+		$uid = $user->getUID();
+		\OC::$server->getJobList()->add(new AsyncHttpJob(), [$url, $fields, $uid]);
 	}
 
 	/**
