@@ -708,7 +708,9 @@ class Server extends SimpleContainer implements IServerContainer {
 	}
 
 	/**
-	 * @return \OCP\IDateTimeZone
+	 * Get the timezone of the current user, based on his session information and config data
+	 *
+	 * @return \DateTimeZone
 	 */
 	public function getDateTimeZone() {
 		return $this->query('DateTimeZone');
